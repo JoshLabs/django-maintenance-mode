@@ -27,5 +27,3 @@ class Command(BaseCommand):
                 return
                 
         print(self.help)
-        
-        

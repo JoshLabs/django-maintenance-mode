@@ -14,7 +14,7 @@ from django.utils.cache import add_never_cache_headers
 if django.VERSION < (1, 10):
     __MaintenanceModeMiddlewareBaseClass = object
 else:
-    #https://docs.djangoproject.com/en/1.10/topics/http/middleware/#upgrading-pre-django-1-10-style-middleware
+    # https://docs.djangoproject.com/en/1.10/topics/http/middleware/#upgrading-pre-django-1-10-style-middleware
     from django.utils.deprecation import MiddlewareMixin
     __MaintenanceModeMiddlewareBaseClass = MiddlewareMixin
 
@@ -26,7 +26,16 @@ class MaintenanceModeMiddleware(__MaintenanceModeMiddlewareBaseClass):
 
     def process_request(self, request):
 
-        if settings.MAINTENANCE_MODE or core.get_maintenance_mode():
+        mode_status = settings.MAINTENANCE_MODE or core.get_maintenance_mode()
+
+        # Over-write mode status based on Organization specific settings
+        if hasattr(request, "user") and hasattr(request.user, "org"):
+            if request.user.org.id in settings.MAINTENANCE_EXCLUDED_ORGS:
+                mode_status = False
+            elif request.user.org.id in settings.MAINTENANCE_INCLUDED_ORGS:
+                mode_status = True
+
+        if mode_status:
 
             try:
                 url_off = reverse('maintenance_mode_off')
@@ -37,7 +46,7 @@ class MaintenanceModeMiddleware(__MaintenanceModeMiddlewareBaseClass):
                     return None
 
             except NoReverseMatch:
-                #maintenance_mode.urls not added
+                # Maintenance_mode.urls not added
                 pass
 
             if hasattr(request, 'user'):
@@ -71,7 +80,6 @@ class MaintenanceModeMiddleware(__MaintenanceModeMiddlewareBaseClass):
         else:
             return None
 
-
     def get_request_context(self, request):
 
         if settings.MAINTENANCE_MODE_TEMPLATE_CONTEXT:
@@ -86,4 +94,3 @@ class MaintenanceModeMiddleware(__MaintenanceModeMiddlewareBaseClass):
             return func(request = request)
         else:
             return {}
-
