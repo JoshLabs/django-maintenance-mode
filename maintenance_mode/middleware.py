@@ -24,61 +24,57 @@ from maintenance_mode import settings
 
 class MaintenanceModeMiddleware(__MaintenanceModeMiddlewareBaseClass):
 
-    def process_request(self, request):
+    def _process_request(self, request):
+        """
+        Overwritten to always assume that this will be called only for maintenance mode.
+         Ideally, maintenance mode check should be done by callee function
+        :param request:
+        :return:
+        """
 
-        mode_status = settings.MAINTENANCE_MODE or core.get_maintenance_mode()
+        try:
+            url_off = reverse('maintenance_mode_off')
 
-        # Over-write mode status based on Organization specific settings
-        if hasattr(request, "user") and hasattr(request.user, "org"):
-            if request.user.org.id in settings.MAINTENANCE_EXCLUDED_ORGS:
-                mode_status = False
-            elif request.user.org.id in settings.MAINTENANCE_INCLUDED_ORGS:
-                mode_status = True
+            resolve(url_off)
 
-        if mode_status:
+            if url_off == request.path_info:
+                return None
 
-            try:
-                url_off = reverse('maintenance_mode_off')
+        except NoReverseMatch:
+            # Maintenance_mode.urls not added
+            pass
 
-                resolve(url_off)
+        if hasattr(request, 'user'):
 
-                if url_off == request.path_info:
-                    return None
+            if settings.MAINTENANCE_MODE_IGNORE_STAFF and request.user.is_staff:
+                return None
 
-            except NoReverseMatch:
-                # Maintenance_mode.urls not added
-                pass
+            if settings.MAINTENANCE_MODE_IGNORE_SUPERUSER and request.user.is_superuser:
+                return None
 
-            if hasattr(request, 'user'):
+        for ip_address_re in settings.MAINTENANCE_MODE_IGNORE_IP_ADDRESSES_RE:
 
-                if settings.MAINTENANCE_MODE_IGNORE_STAFF and request.user.is_staff:
-                    return None
+            if ip_address_re.match(request.META['REMOTE_ADDR']):
+                return None
 
-                if settings.MAINTENANCE_MODE_IGNORE_SUPERUSER and request.user.is_superuser:
-                    return None
+        for url_re in settings.MAINTENANCE_MODE_IGNORE_URLS_RE:
 
-            for ip_address_re in settings.MAINTENANCE_MODE_IGNORE_IP_ADDRESSES_RE:
+            if url_re.match(request.path_info):
+                return None
 
-                if ip_address_re.match(request.META['REMOTE_ADDR']):
-                    return None
-
-            for url_re in settings.MAINTENANCE_MODE_IGNORE_URLS_RE:
-
-                if url_re.match(request.path_info):
-                    return None
-
-            if settings.MAINTENANCE_MODE_REDIRECT_URL:
-                return HttpResponseRedirect(settings.MAINTENANCE_MODE_REDIRECT_URL)
-            else:
-                if django.VERSION < (1, 8):
-                    response = render_to_response(settings.MAINTENANCE_MODE_TEMPLATE, self.get_request_context(request), context_instance=RequestContext(request), content_type='text/html')
-                else:
-                    response = render(request, settings.MAINTENANCE_MODE_TEMPLATE, context=self.get_request_context(request), content_type='text/html', status=503)
-
-                add_never_cache_headers(response)
-                return response
+        if settings.MAINTENANCE_MODE_REDIRECT_URL:
+            return HttpResponseRedirect(settings.MAINTENANCE_MODE_REDIRECT_URL)
         else:
-            return None
+            if django.VERSION < (1, 8):
+                response = render_to_response(settings.MAINTENANCE_MODE_TEMPLATE, self.get_request_context(request), context_instance=RequestContext(request), content_type='text/html')
+            else:
+                response = render(request, settings.MAINTENANCE_MODE_TEMPLATE, context=self.get_request_context(request), content_type='text/html', status=503)
+
+            add_never_cache_headers(response)
+            return response
+
+    def process_request(self, request):
+        raise NotImplementedError
 
     def get_request_context(self, request):
 

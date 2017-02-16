@@ -29,4 +29,3 @@ def set_maintenance_mode(value):
     handler = open(settings.MAINTENANCE_MODE_STATE_FILE_PATH, 'w+')
     handler.write(str(int(value)))
     handler.close()
-
